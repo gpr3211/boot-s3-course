@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/base64"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
@@ -40,14 +43,45 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	fmt.Println(header)
 
 	fmt.Println("uploading thumbnail for video", videoID, "by user", userID)
+
 	meta := r.Header.Get("Content-Type")
-	id, _ := uuid.Parse(meta)
-	metadata, err := cfg.db.GetVideo(id)
+
+	// fetch metadata from DB
+	metadata, err := cfg.db.GetVideo(videoID)
 	if err != nil {
 		respondWithError(w, 405, "bad header", err)
+		return
 	}
+	// check if user is the creator of video
+	if metadata.CreateVideoParams.UserID != userID {
+		respondWithError(w, http.StatusUnauthorized, "no access", errors.New("Unauthorized attempt"))
+		return
+	}
+	finalData, err := io.ReadAll(file)
+	if err != nil {
+
+		respondWithError(w, http.StatusInternalServerError, "internal server error", errors.New("internal server error"))
+		return
+	}
+
+	newThumb := thumbnail{
+		data:      finalData,
+		mediaType: string(meta),
+	}
+
+	path := "http://localhost:" + cfg.port + "/api/thumbnails/" + videoID.String()
+	metadata.ThumbnailURL = &path
 
 	// TODO: implement the upload here
 
-	respondWithJSON(w, http.StatusOK, struct{}{})
+	encodedImage := base64.StdEncoding.EncodeToString(finalData)
+	dataURL := fmt.Sprintf("data:%s;base64,%s", meta, encodedImage)
+	metadata.ThumbnailURL = &dataURL
+	err = cfg.db.UpdateVideo(metadata)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "internal server error", errors.New("internal server error"))
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, newThumb)
 }
