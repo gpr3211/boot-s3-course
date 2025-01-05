@@ -1,13 +1,10 @@
 package main
 
 import (
-	"errors"
-	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -33,77 +30,57 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	const maxMemory = 10 << 20
-
+	const maxMemory = 10 << 20 // 10 MB
 	r.ParseMultipartForm(maxMemory)
+
 	file, header, err := r.FormFile("thumbnail")
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Unable to parse form file", err)
 		return
 	}
 	defer file.Close()
-	fmt.Println(header)
 
-	fmt.Println("uploading thumbnail for video", videoID, "by user", userID)
-
-	meta := r.Header.Get("Content-Type")
-	spl := strings.Fields(meta)
-	out, _ := strings.CutSuffix(spl[0], ";")
-	final := strings.Split(out, "/")
-
-	// fetch metadata from DB
-	metadata, err := cfg.db.GetVideo(videoID)
+	mediaType, _, err := mime.ParseMediaType(header.Header.Get("Content-Type"))
 	if err != nil {
-		respondWithError(w, 405, "bad header", err)
+		respondWithError(w, http.StatusBadRequest, "Invalid Content-Type", err)
 		return
 	}
-	// check if user is the creator of video
-	if metadata.CreateVideoParams.UserID != userID {
-		respondWithError(w, http.StatusUnauthorized, "no access", errors.New("Unauthorized attempt"))
-		return
-	}
-	finalData, err := io.ReadAll(file)
-	if err != nil {
-
-		respondWithError(w, http.StatusInternalServerError, "internal server error", errors.New("internal server error"))
+	if mediaType != "image/jpeg" && mediaType != "image/png" {
+		respondWithError(w, http.StatusBadRequest, "Invalid file type", nil)
 		return
 	}
 
-	thumbURL := fmt.Sprintf("http://localhost:%s/api/assets/%s.%s", cfg.port, videoID.String(), final[0])
+	assetPath := getAssetPath(videoID, mediaType)
+	assetDiskPath := cfg.getAssetDiskPath(assetPath)
 
-	metadata.ThumbnailURL = &thumbURL
-	err = cfg.db.UpdateVideo(metadata)
+	dst, err := os.Create(assetDiskPath)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "internal server err", errors.New("internal server error"))
+		respondWithError(w, http.StatusInternalServerError, "Unable to create file on server", err)
+		return
+	}
+	defer dst.Close()
+	if _, err = io.Copy(dst, file); err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error saving file", err)
 		return
 	}
 
-	// TODO: implement the upload here
-
-	fullPath, _ := os.Getwd()
-	assetPath := filepath.Join(fullPath, cfg.assetsRoot, fmt.Sprintf("%s.%s", videoID.String(), final[0]))
-	err = writeToFile(finalData, assetPath)
+	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "internal server err", errors.New("internal server error"))
+		respondWithError(w, http.StatusInternalServerError, "Couldn't find video", err)
+		return
+	}
+	if video.UserID != userID {
+		respondWithError(w, http.StatusUnauthorized, "Not authorized to update this video", nil)
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, metadata)
-}
-
-func writeToFile(s []byte, path string) error {
-	fd, err := os.Create(path)
+	url := cfg.getAssetURL(assetPath)
+	video.ThumbnailURL = &url
+	err = cfg.db.UpdateVideo(video)
 	if err != nil {
-		fmt.Println("failed opening file", err)
-		return err
+		respondWithError(w, http.StatusInternalServerError, "Couldn't update video", err)
+		return
 	}
-	defer fd.Close()
-	n, err := fd.Write(s)
-	if err != nil {
 
-		fmt.Println("failed writing file", err)
-		return err
-	}
-	fmt.Printf("%d Bytes to %s", n, path)
-	return nil
+	respondWithJSON(w, http.StatusOK, video)
 }
