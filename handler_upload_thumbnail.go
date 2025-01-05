@@ -1,11 +1,13 @@
 package main
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -45,6 +47,9 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	fmt.Println("uploading thumbnail for video", videoID, "by user", userID)
 
 	meta := r.Header.Get("Content-Type")
+	spl := strings.Fields(meta)
+	out, _ := strings.CutSuffix(spl[0], ";")
+	final := strings.Split(out, "/")
 
 	// fetch metadata from DB
 	metadata, err := cfg.db.GetVideo(videoID)
@@ -64,24 +69,41 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	newThumb := thumbnail{
-		data:      finalData,
-		mediaType: string(meta),
-	}
+	thumbURL := fmt.Sprintf("http://localhost:%s/api/assets/%s.%s", cfg.port, videoID.String(), final[0])
 
-	path := "http://localhost:" + cfg.port + "/api/thumbnails/" + videoID.String()
-	metadata.ThumbnailURL = &path
-
-	// TODO: implement the upload here
-
-	encodedImage := base64.StdEncoding.EncodeToString(finalData)
-	dataURL := fmt.Sprintf("data:%s;base64,%s", meta, encodedImage)
-	metadata.ThumbnailURL = &dataURL
+	metadata.ThumbnailURL = &thumbURL
 	err = cfg.db.UpdateVideo(metadata)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "internal server error", errors.New("internal server error"))
+		respondWithError(w, http.StatusInternalServerError, "internal server err", errors.New("internal server error"))
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, newThumb)
+	// TODO: implement the upload here
+
+	fullPath, _ := os.Getwd()
+	assetPath := filepath.Join(fullPath, cfg.assetsRoot, fmt.Sprintf("%s.%s", videoID.String(), final[0]))
+	err = writeToFile(finalData, assetPath)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "internal server err", errors.New("internal server error"))
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, metadata)
+}
+
+func writeToFile(s []byte, path string) error {
+	fd, err := os.Create(path)
+	if err != nil {
+		fmt.Println("failed opening file", err)
+		return err
+	}
+	defer fd.Close()
+	n, err := fd.Write(s)
+	if err != nil {
+
+		fmt.Println("failed writing file", err)
+		return err
+	}
+	fmt.Printf("%d Bytes to %s", n, path)
+	return nil
 }

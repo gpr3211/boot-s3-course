@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
-	"github.com/google/uuid"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -17,19 +16,18 @@ type apiConfig struct {
 	jwtSecret        string
 	platform         string
 	filepathRoot     string
-	assetsRoot       string
+	assetsRoot       string // assetsRoot path where asset files like thumbnails are stored
 	s3Bucket         string
 	s3Region         string
 	s3CfDistribution string
 	port             string
 }
 
+// thumbnail
 type thumbnail struct {
 	data      []byte
 	mediaType string
 }
-
-var videoThumbnails = map[uuid.UUID]thumbnail{}
 
 func main() {
 	godotenv.Load(".env")
