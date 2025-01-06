@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
-	"github.com/google/uuid"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -17,7 +16,7 @@ func (cfg apiConfig) ensureAssetsDir() error {
 	return nil
 }
 
-func getAssetPath(videoID uuid.UUID, mediaType string) string {
+func getAssetPath(mediaType string) string {
 	r := make([]byte, 32)
 	rand.Read(r)
 	finalName := base64.RawURLEncoding.EncodeToString(r)

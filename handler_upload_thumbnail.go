@@ -2,13 +2,12 @@ package main
 
 import (
 	"fmt"
+	"github.com/google/uuid"
+	"github.com/gpr3211/boot-s3-course/internal/auth"
 	"io"
 	"mime"
 	"net/http"
 	"os"
-
-	"github.com/google/uuid"
-	"github.com/gpr3211/boot-s3-course/internal/auth"
 )
 
 func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +51,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	assetPath := getAssetPath(videoID, mediaType)
+	assetPath := getAssetPath(mediaType)
 	assetDiskPath := cfg.getAssetDiskPath(assetPath)
 
 	dst, err := os.Create(assetDiskPath)
@@ -84,6 +83,5 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusInternalServerError, "Couldn't update video", err)
 		return
 	}
-
 	respondWithJSON(w, http.StatusOK, video)
 }
