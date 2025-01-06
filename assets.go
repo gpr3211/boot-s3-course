@@ -1,12 +1,13 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
+	"github.com/google/uuid"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
 func (cfg apiConfig) ensureAssetsDir() error {
@@ -17,8 +18,12 @@ func (cfg apiConfig) ensureAssetsDir() error {
 }
 
 func getAssetPath(videoID uuid.UUID, mediaType string) string {
+	r := make([]byte, 32)
+	rand.Read(r)
+	finalName := base64.RawURLEncoding.EncodeToString(r)
+
 	ext := mediaTypeToExt(mediaType)
-	return fmt.Sprintf("%s%s", videoID, ext)
+	return fmt.Sprintf("%s%s", finalName, ext)
 }
 
 func (cfg apiConfig) getAssetDiskPath(assetPath string) string {

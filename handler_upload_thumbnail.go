@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 )
 
 func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Request) {
+
 	videoIDString := r.PathValue("videoID")
 	videoID, err := uuid.Parse(videoIDString)
 	if err != nil {
@@ -63,6 +65,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusInternalServerError, "Error saving file", err)
 		return
 	}
+	fmt.Println("thumb uploaded")
 
 	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
