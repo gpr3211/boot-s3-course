@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
 
-	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
-
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/gpr3211/boot-s3-course/internal/database"
 	"github.com/joho/godotenv"
+
 	_ "github.com/lib/pq"
 )
 
@@ -19,6 +22,7 @@ type apiConfig struct {
 	assetsRoot       string // assetsRoot path where asset files like thumbnails are stored
 	s3Bucket         string
 	s3Region         string
+	s3Client         *s3.Client
 	s3CfDistribution string
 	port             string
 }
@@ -76,6 +80,11 @@ func main() {
 	if s3CfDistribution == "" {
 		log.Fatal("S3_CF_DISTRO environment variable is not set")
 	}
+	s3Conf, err := config.LoadDefaultConfig(context.Background(), config.WithRegion("us-east-1"))
+	if err != nil {
+		log.Fatal("Failed to load us config")
+	}
+	bucketclient := s3.NewFromConfig(s3Conf)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -89,6 +98,7 @@ func main() {
 		filepathRoot:     filepathRoot,
 		assetsRoot:       assetsRoot,
 		s3Bucket:         s3Bucket,
+		s3Client:         bucketclient,
 		s3Region:         s3Region,
 		s3CfDistribution: s3CfDistribution,
 		port:             port,
