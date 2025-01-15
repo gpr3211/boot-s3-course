@@ -93,6 +93,7 @@ type VideoStats struct {
 	} `json:"streams"`
 }
 
+// gcd greatest common divisor
 func gcd(a, b int) int {
 	for b != 0 {
 		a, b = b, a%b
@@ -140,6 +141,16 @@ func GetVideoAspectRatio(filepath string) (string, error) {
 	fmt.Printf("Video: %s\n Aspect Ratio: %s", filepath, AR)
 
 	return AR, nil
+}
+func processVideForFastStart(assetPath string) (string, error) {
+	proc := assetPath + ".processing"
+	v := exec.Command("ffmpeg", "-i", assetPath, "-c", "copy", "-movflags", "faststart", "-f", "mp4", proc)
+	err := v.Run() // Changed from Output() to Run() since we don't need stdout
+	if err != nil {
+		return "", err
+	}
+	fmt.Printf("Executing command: %v\n", v.String())
+	return proc, nil
 }
 
 func SetAspectPrefix(assetpath, aspect string) string {

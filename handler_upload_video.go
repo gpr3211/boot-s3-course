@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gpr3211/boot-s3-course/internal/auth"
 	"io"
+	"log"
 	"mime"
 	"net/http"
 	"os"
@@ -70,16 +71,36 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusInternalServerError, "Error saving file", err)
 		return
 	}
+
 	ar, err := GetVideoAspectRatio(dst.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error getting aspect ratio", err)
+		return
+	}
+
+	processedPath, err := processVideForFastStart(dst.Name())
+	if err != nil {
+		log.Printf("Failed to process Video: %v", err)
+		respondWithError(w, http.StatusInternalServerError, "Error processing video", err)
+		return
+	}
+	defer os.Remove(processedPath) // Clean up the processed file when done
+
+	// Open the processed file
+	processedFile, err := os.Open(processedPath)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error opening processed file", err)
+		fmt.Println("Failed to open file")
+		return
+	}
+	defer processedFile.Close()
+
 	finalPath := SetAspectPrefix(assetPath, ar)
+	fmt.Printf("Final path uploaded to S3: %s\n", finalPath)
 
-	fmt.Println("printing final")
-	fmt.Println(finalPath)
-
-	dst.Seek(0, io.SeekStart) // reset file pointer to beggining, allowing us to read file from start
 	s3Object := s3.PutObjectInput{
 		Bucket:      &cfg.s3Bucket,
-		Body:        dst,
+		Body:        processedFile, // Use the file directly instead of bytes buffer
 		Key:         &finalPath,
 		ContentType: &mediaType,
 	}
@@ -88,7 +109,6 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, 407, "error uploading to s3", err)
 	}
 	fmt.Println(putObj)
-
 	// update DB with new video link
 
 	video, err := cfg.db.GetVideo(videoID)
