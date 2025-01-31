@@ -1,4 +1,5 @@
 out
+boot-s3-course
 *.db
 .env
 assets/
